@@ -1,0 +1,343 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  password      String
+  displayName   String
+  profilePicture String?
+  aboutText     String?   @default("")
+  isActive      Boolean   @default(true)
+  lastSeenAt    DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  contacts       Contact[]  @relation("contactFrom")
+  contactedBy    Contact[]  @relation("contactTo")
+  conversations  ConversationMember[]
+  messages       Message[]
+  messageReads   MessageReadReceipt[]
+  messageReactions MessageReaction[]
+  blockedUsers   BlockedUser[] @relation("blocker")
+  blockedBy      BlockedUser[] @relation("blocked")
+  groups         GroupMember[]
+  sentReports    Report[] @relation("reporterUser")
+  receivedReports Report[] @relation("reportedUser")
+
+  @@index([email])
+  @@index([createdAt])
+}
+
+// Contact model
+model Contact {
+  id        String   @id @default(cuid())
+  fromId    String
+  toId      String
+  nickname  String?
+  isFavorite Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  from User @relation("contactFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   User @relation("contactTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, toId])
+  @@index([fromId])
+  @@index([toId])
+}
+
+// Conversation model (1-to-1 and groups)
+model Conversation {
+  id          String   @id @default(cuid())
+  name        String?  // Only for groups
+  isGroup     Boolean  @default(false)
+  picture     String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members Message[]
+  conversationMembers ConversationMember[]
+
+  @@index([createdAt])
+}
+
+// ConversationMember model
+model ConversationMember {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  joinedAt       DateTime @default(now())
+  leftAt         DateTime?
+  role           String   @default("member") // "admin", "member"
+  unreadCount    Int      @default(0)
+  lastReadAt     DateTime?
+  
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([conversationId])
+  @@index([userId])
+}
+
+// Message model
+model Message {
+  id              String   @id @default(cuid())
+  conversationId  String
+  senderId        String
+  content         String
+  messageType     String   @default("text") // "text", "image", "video", "audio", "document", "system"
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  replyToId       String?   // For message replies
+  forwardedFromId String?   // For forwarded messages
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  conversation   Conversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User               @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo        Message?           @relation("messageReply", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        Message[]          @relation("messageReply")
+  attachments    MessageAttachment[]
+  reactions      MessageReaction[]
+  readReceipts   MessageReadReceipt[]
+  deliveryReceipts MessageDeliveryReceipt[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+// Message attachments
+model MessageAttachment {
+  id        String   @id @default(cuid())
+  messageId String
+  fileUrl   String
+  fileType  String   // "image", "video", "audio", "document"
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+}
+
+// Message reactions
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@index([userId])
+}
+
+// Message read receipts
+model MessageReadReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+// Message delivery receipts
+model MessageDeliveryReceipt {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  deliveredAt DateTime @default(now())
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+}
+
+// Group model (extends Conversation)
+model Group {
+  id          String   @id @default(cuid())
+  conversationId String
+  createdById String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members GroupMember[]
+  invites GroupInvite[]
+  announcements String? // Latest group announcement
+
+  @@index([createdById])
+}
+
+// Group member
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String   @default("member") // "admin", "member"
+  joinedAt  DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+// Group invites
+model GroupInvite {
+  id        String   @id @default(cuid())
+  groupId   String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@index([groupId])
+}
+
+// Blocked users
+model BlockedUser {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+// Starred messages
+model StarredMessage {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId])
+  @@index([messageId])
+  @@index([userId])
+}
+
+// Pinned messages
+model PinnedMessage {
+  id            String   @id @default(cuid())
+  messageId     String
+  conversationId String
+  pinnedAt      DateTime @default(now())
+
+  @@unique([messageId, conversationId])
+  @@index([conversationId])
+}
+
+// Status/Stories
+model Status {
+  id        String   @id @default(cuid())
+  userId    String
+  content   String   // Text, image URL, or video URL
+  statusType String  @default("text") // "text", "image", "video"
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  viewers StatusViewer[]
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Status viewers
+model StatusViewer {
+  id        String   @id @default(cuid())
+  statusId  String
+  userId    String
+  viewedAt  DateTime @default(now())
+
+  status Status @relation(fields: [statusId], references: [id], onDelete: Cascade)
+
+  @@unique([statusId, userId])
+  @@index([statusId])
+  @@index([userId])
+}
+
+// Notifications
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // "message", "call", "group_add", etc.
+  data      String   // JSON data
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+// Call logs
+model Call {
+  id           String   @id @default(cuid())
+  conversationId String
+  callerId     String
+  calleeId     String?  // Null for group calls
+  callType     String   // "voice" or "video"
+  duration     Int      // in seconds
+  status       String   // "completed", "missed", "rejected"
+  startedAt    DateTime
+  endedAt      DateTime?
+  createdAt    DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([callerId])
+  @@index([createdAt])
+}
+
+// Reports
+model Report {
+  id        String   @id @default(cuid())
+  reporterId String
+  reportedId String
+  reason    String
+  description String?
+  status    String   @default("open") // "open", "under_review", "resolved", "dismissed"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reporter User @relation("reporterUser", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported User @relation("reportedUser", fields: [reportedId], references: [id], onDelete: Cascade)
+
+  @@index([reporterId])
+  @@index([reportedId])
+  @@index([status])
+}
