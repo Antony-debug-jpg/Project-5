@@ -1,5 +1,25 @@
 # ChatFlow
 
+## Deployment
+
+### Backend and database on Render
+
+1. Create a new Render Blueprint from this repository.
+2. Render will provision the `chatflow-api` web service and `chatflow-db` PostgreSQL database from `render.yaml`.
+3. Set `SOCKET_IO_CORS_ORIGIN` to the deployed Vercel URL.
+4. After the first deploy, run the Prisma migration against the Render database if migrations have been added:
+
+```bash
+npx prisma migrate deploy --schema=prisma/schema.prisma
+```
+
+### Frontend on Vercel
+
+1. Import this repository into Vercel.
+2. Set the project root directory to `client`.
+3. Add `VITE_API_URL` with the Render API URL followed by `/api`.
+4. Deploy with the included `client/vercel.json` configuration.
+
 A modern, production-quality messaging application with real-time communication, media support, and rich features for both personal and group conversations.
 
 ## Overview
