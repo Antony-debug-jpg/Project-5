@@ -20,6 +20,15 @@ npx prisma migrate deploy --schema=prisma/schema.prisma
 3. Add `VITE_API_URL` with the Render API URL followed by `/api`.
 4. Deploy with the included `client/vercel.json` configuration.
 
+### Frontend on GitHub Pages
+
+The repository includes a GitHub Actions workflow at `.github/workflows/deploy-pages.yml`.
+In the repository settings, enable Pages with **GitHub Actions** as the source and add
+the `VITE_API_URL` repository secret pointing to the deployed API URL ending in `/api`.
+The frontend will be available at:
+
+`https://Antony-debug-jpg.github.io/Project-5/`
+
 A modern, production-quality messaging application with real-time communication, media support, and rich features for both personal and group conversations.
 
 ## Overview
